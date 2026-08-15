@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('phone', 15)->index();
             $table->string('code', 10);
             $table->string('purpose', 32)->default('login');
-            $table->timestamp('expires_at');
+            $table->dateTime('expires_at');
             $table->timestamp('consumed_at')->nullable();
             $table->timestamps();
         });

@@ -51,8 +51,8 @@ return new class extends Migration
             $table->unsignedInteger('amount_inr');
             $table->string('gateway', 32)->default('manual');
             $table->string('gateway_payment_id')->nullable();
-            $table->timestamp('starts_at');
-            $table->timestamp('ends_at');
+            $table->dateTime('starts_at');
+            $table->dateTime('ends_at');
             $table->timestamps();
         });
 

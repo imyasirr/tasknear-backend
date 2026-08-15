@@ -24,8 +24,8 @@ return new class extends Migration
             $table->foreignId('event_detail_id')->constrained()->cascadeOnDelete();
             $table->foreignId('category_id')->constrained()->cascadeOnDelete();
             $table->unsignedInteger('headcount');
-            $table->timestamp('start_at');
-            $table->timestamp('end_at');
+            $table->dateTime('start_at');
+            $table->dateTime('end_at');
             $table->unsignedInteger('rate_per_worker_inr');
             $table->string('status', 32)->default('filling');
             $table->timestamps();
