@@ -32,17 +32,17 @@ class AuthController extends Controller
             ]);
         }
 
-        $code = app()->environment('local') ? '123456' : (string) random_int(100000, 999999);
+        $code = $this->issueOtpCode();
 
         OtpCode::query()->create([
             'phone' => $phone,
             'code' => $code,
             'purpose' => $data['intent'] ?? 'login',
-            'expires_at' => now()->addMinutes(10),
+            'expires_at' => now()->addMinutes((int) config('otp.expires_minutes', 10)),
         ]);
 
         $payload = ['message' => 'OTP sent.'];
-        if (app()->environment('local')) {
+        if ($this->exposeOtpInResponse()) {
             $payload['otp'] = $code;
         }
 
@@ -220,7 +220,7 @@ class AuthController extends Controller
             ->latest()
             ->first();
 
-        $devBypass = app()->environment('local') && $code === '123456';
+        $devBypass = $this->demoOtpCode() && $code === $this->demoOtpCode();
 
         if (! $devBypass && (! $otp || ! $otp->isValid($code))) {
             throw ValidationException::withMessages([
@@ -233,6 +233,33 @@ class AuthController extends Controller
         }
 
         return $phone;
+    }
+
+    private function demoOtpCode(): ?string
+    {
+        $configured = config('otp.demo_code');
+        if (is_string($configured) && $configured !== '') {
+            return $configured;
+        }
+
+        return app()->environment('local') ? '123456' : null;
+    }
+
+    private function issueOtpCode(): string
+    {
+        $demo = $this->demoOtpCode();
+        if ($demo) {
+            return $demo;
+        }
+
+        return (string) random_int(100000, 999999);
+    }
+
+    private function exposeOtpInResponse(): bool
+    {
+        return (bool) config('otp.show_in_response')
+            || (bool) $this->demoOtpCode()
+            || app()->environment('local');
     }
 
     private function tokenResponse(User $user): JsonResponse
