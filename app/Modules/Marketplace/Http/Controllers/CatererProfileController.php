@@ -27,7 +27,6 @@ class CatererProfileController extends Controller
         ]);
 
         $user = $request->user();
-        $user->assignRole('caterer');
 
         $profile = CatererProfile::query()->firstOrCreate(
             ['user_id' => $user->id],

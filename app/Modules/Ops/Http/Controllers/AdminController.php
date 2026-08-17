@@ -32,6 +32,9 @@ class AdminController extends Controller
         return response()->json([
             'clients' => UserRole::query()->where('role', 'customer')->count(),
             'caterers_active' => CatererProfile::query()->where('status', 'active')->count(),
+            'workers_active' => WorkerProfile::query()->where('status', 'active')->count(),
+            'categories' => \App\Modules\Catalog\Models\Category::query()->where('is_active', true)->count(),
+            'provider_types' => \App\Modules\Catalog\Models\ProviderType::query()->where('is_active', true)->count(),
             'events_open' => ServiceRequest::query()->where('type', 'event')->whereNotIn('status', ['completed', 'settled', 'cancelled'])->count(),
             'tasks_open' => ServiceRequest::query()->where('type', 'task')->whereNotIn('status', ['completed', 'settled', 'cancelled'])->count(),
             'payments_pending' => Payment::query()->where('status', 'pending')->count(),
@@ -48,7 +51,7 @@ class AdminController extends Controller
     public function users(): JsonResponse
     {
         return response()->json(
-            User::query()->with(['roles', 'catererProfile.skills.category'])->latest()->get()
+            User::query()->with(['roles', 'catererProfile.skills.category', 'workerProfile.skills.category'])->latest()->get()
         );
     }
 

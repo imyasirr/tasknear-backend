@@ -9,6 +9,7 @@ use App\Modules\Marketplace\Models\CatererProfile;
 use App\Modules\Marketplace\Models\ServiceRequest;
 use App\Modules\Marketplace\Models\VendorOffer;
 use App\Modules\Marketplace\Services\MatchingSettings;
+use App\Modules\Catalog\Services\ProviderTypes;
 use App\Modules\Ops\Services\Auditor;
 use App\Modules\Ops\Services\Notifier;
 use App\Modules\Workers\Models\WorkerProfile;
@@ -45,10 +46,39 @@ class AutoMatchAction
             return $request->fresh(['eventDetail.shifts.assignments.worker', 'taskDetail', 'assignments.worker', 'payments', 'vendor.catererProfile']);
         }
 
-        $this->ringCaterers($request, $actor, $ringSeconds);
+        $this->ringProviders($request, $actor, $ringSeconds);
         $this->confirmIfFilled($request, $actor);
 
         return $request->fresh(['eventDetail.shifts.assignments.worker', 'taskDetail', 'assignments.worker', 'payments', 'vendor.catererProfile']);
+    }
+
+    private function ringProviders(ServiceRequest $request, User $actor, ?int $ringSeconds = null): void
+    {
+        $slug = $request->provider_type ?: 'caterer';
+        $mode = app(ProviderTypes::class)->matchMode($slug);
+
+        if ($mode === 'worker') {
+            $this->ringWorkers($request, $actor);
+
+            return;
+        }
+
+        $this->ringVendors($request, $actor, $ringSeconds);
+    }
+
+    private function ringWorkers(ServiceRequest $request, User $actor): void
+    {
+        $request->loadMissing(['eventDetail.shifts', 'taskDetail']);
+
+        if ($request->type === 'task') {
+            $this->ringTask($request, $actor);
+
+            return;
+        }
+
+        foreach ($request->eventDetail?->shifts ?? [] as $shift) {
+            $this->ringShift($request, $shift, $actor);
+        }
     }
 
     public function refill(Assignment $old, User $actor): void
@@ -67,7 +97,7 @@ class AutoMatchAction
             return;
         }
 
-        $this->ringCaterers($request, $actor, null);
+        $this->ringProviders($request, $actor, null);
         $this->confirmIfFilled($request, $actor);
     }
 
@@ -219,7 +249,7 @@ class AutoMatchAction
             return;
         }
 
-        foreach ($this->rankedWorkers($request, null, null)->take($toRing) as $profile) {
+        foreach ($this->rankedWorkers($request, $request->taskDetail?->category_id, null)->take($toRing) as $profile) {
             $this->offer($request, $profile, $actor, null, $request->taskDetail?->title ?? 'Task');
         }
     }
@@ -250,11 +280,13 @@ class AutoMatchAction
             ->count();
     }
 
-    private function ringCaterers(ServiceRequest $request, User $actor, ?int $ringSeconds = null): void
+    private function ringVendors(ServiceRequest $request, User $actor, ?int $ringSeconds = null): void
     {
         if ($request->vendor_user_id) {
             return;
         }
+
+        $providerRole = app(ProviderTypes::class)->roleFor($request->provider_type ?: 'caterer');
 
         $seconds = MatchingSettings::vendorOfferSeconds($ringSeconds);
         $acceptUntil = MatchingSettings::acceptDeadline($request->scheduled_start);
@@ -283,6 +315,7 @@ class AutoMatchAction
             ->where('status', 'active')
             ->where('is_available', true)
             ->whereNotIn('user_id', $already)
+            ->whereHas('user.roles', fn ($q) => $q->where('role', $providerRole))
             ->when($city !== '', fn ($q) => $q->whereRaw('lower(city) = ?', [$city]))
             ->when($categoryIds !== [], fn ($q) => $q->whereHas('skills', fn ($s) => $s->whereIn('category_id', $categoryIds)))
             ->with('user')
@@ -302,7 +335,7 @@ class AutoMatchAction
             ]);
 
             if (in_array($request->status, ['matching', 'awaiting_payment', 'posted', 'draft'], true)) {
-                $request->transitionTo('matching', $actor, 'Ringing nearby catering companies');
+                $request->transitionTo('matching', $actor, 'Ringing nearby '.$providerRole.' companies');
             }
 
             $this->notifier->send($profile->user, 'vendor.ringing', [
@@ -321,7 +354,10 @@ class AutoMatchAction
             return $request->eventDetail?->shifts?->pluck('category_id')->filter()->unique()->values()->all() ?? [];
         }
 
-        return [];
+        $request->loadMissing('taskDetail');
+        $categoryId = $request->taskDetail?->category_id;
+
+        return $categoryId ? [(int) $categoryId] : [];
     }
 
     private function allSlotsFilled(ServiceRequest $request): bool
@@ -354,10 +390,15 @@ class AutoMatchAction
 
         $exclude = $busyOnThis->merge($overlapping)->unique();
 
+        $city = mb_strtolower((string) $request->city);
+        $providerRole = app(ProviderTypes::class)->roleFor($request->provider_type ?: 'worker');
+
         return WorkerProfile::query()
             ->where('status', 'active')
             ->where('is_available', true)
             ->whereNotIn('user_id', $exclude)
+            ->whereHas('user.roles', fn ($q) => $q->where('role', $providerRole))
+            ->when($city !== '', fn ($q) => $q->whereRaw('lower(city) = ?', [$city]))
             ->when($categoryId, fn ($q) => $q->whereHas('skills', fn ($s) => $s->where('category_id', $categoryId)))
             ->with('user')
             ->get()

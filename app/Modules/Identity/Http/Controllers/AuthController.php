@@ -4,8 +4,10 @@ namespace App\Modules\Identity\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Catalog\Services\ProviderTypes;
 use App\Modules\Identity\Models\OtpCode;
 use App\Modules\Marketplace\Models\CatererProfile;
+use App\Modules\Workers\Models\WorkerProfile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -70,14 +72,19 @@ class AuthController extends Controller
 
     public function register(Request $request): JsonResponse
     {
+        $providers = app(ProviderTypes::class);
+        $allowedRoles = array_merge(['customer'], $providers->registerRoles());
+
         $data = $request->validate([
             'phone' => ['required', 'string', 'min:10', 'max:15'],
             'name' => ['required', 'string', 'max:120'],
-            'role' => ['required', 'in:customer,caterer'],
+            'role' => ['required', 'in:'.implode(',', $allowedRoles)],
             'city' => ['nullable', 'string', 'max:80'],
             'password' => ['required', Password::min(6)],
             'company_name' => ['nullable', 'string', 'max:160'],
         ]);
+
+        $providers->assertRegisterRole($data['role']);
 
         $phone = preg_replace('/\D+/', '', $data['phone']);
 
@@ -98,12 +105,20 @@ class AuthController extends Controller
         ]);
         $user->assignRole($data['role']);
 
-        if ($data['role'] === 'caterer') {
+        if ($providers->matchMode($data['role']) === 'vendor') {
             CatererProfile::query()->create([
                 'user_id' => $user->id,
                 'company_name' => $data['company_name'] ?: $data['name'],
                 'city' => $data['city'] ?? $user->city,
                 'status' => 'active',
+                'is_available' => true,
+            ]);
+        } elseif ($data['role'] !== 'customer') {
+            WorkerProfile::query()->create([
+                'user_id' => $user->id,
+                'bio' => $data['name'],
+                'city' => $data['city'] ?? $user->city ?? 'Lucknow',
+                'status' => 'pending_kyc',
                 'is_available' => true,
             ]);
         }
@@ -177,12 +192,15 @@ class AuthController extends Controller
     public function updateAvatar(Request $request): JsonResponse
     {
         $request->validate([
-            'avatar' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'avatar' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
         $user = $request->user();
+        $disk = Storage::disk('public');
+        $disk->makeDirectory('avatars');
+
         if ($user->avatar_path) {
-            Storage::disk('public')->delete($user->avatar_path);
+            $disk->delete($user->avatar_path);
         }
 
         $path = $request->file('avatar')->store('avatars', 'public');
@@ -255,6 +273,15 @@ class AuthController extends Controller
         return (string) random_int(100000, 999999);
     }
 
+    private function avatarUrl(User $user): ?string
+    {
+        if (! $user->avatar_path) {
+            return null;
+        }
+
+        return '/storage/'.$user->avatar_path.'?v='.($user->updated_at?->timestamp ?? time());
+    }
+
     private function exposeOtpInResponse(): bool
     {
         return (bool) config('otp.show_in_response')
@@ -283,7 +310,7 @@ class AuthController extends Controller
             'phone' => $user->phone,
             'city' => $user->city,
             'locale' => $user->locale ?: 'en',
-            'avatar_url' => $user->avatar_path ? '/api/v1/me/avatar?v='.$user->updated_at?->timestamp : null,
+            'avatar_url' => $this->avatarUrl($user),
             'password_set' => (bool) $user->password_set_at,
             'roles' => $user->roles->pluck('role')->values(),
             'worker_profile' => $user->workerProfile,

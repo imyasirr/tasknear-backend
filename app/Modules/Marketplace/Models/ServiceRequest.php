@@ -4,6 +4,7 @@ namespace App\Modules\Marketplace\Models;
 
 use App\Models\User;
 use App\Modules\Events\Models\EventDetail;
+use App\Modules\Marketplace\Models\Assignment;
 use App\Modules\Money\Models\Payment;
 use App\Modules\Tasks\Models\TaskDetail;
 use Illuminate\Database\Eloquent\Model;
@@ -18,6 +19,7 @@ class ServiceRequest extends Model
         'requester_id',
         'vendor_user_id',
         'type',
+        'provider_type',
         'slug',
         'city',
         'lat',
@@ -179,15 +181,97 @@ class ServiceRequest extends Model
         $this->loadMissing('vendorAttendance');
         $row = $this->vendorAttendance;
 
-        $this->setAttribute('vendor_attendance', $row ? [
-            'check_in_at' => $row->check_in_at,
-            'check_out_at' => $row->check_out_at,
-            'checked_in' => (bool) $row->check_in_at,
-            'checked_out' => (bool) $row->check_out_at,
-            'check_in_otp' => $showOtps ? $row->check_in_otp : null,
-            'check_out_otp' => $showOtps ? $row->check_out_otp : null,
-        ] : null);
+        if ($row) {
+            $this->setAttribute('vendor_attendance', [
+                'check_in_at' => $row->check_in_at,
+                'check_out_at' => $row->check_out_at,
+                'checked_in' => (bool) $row->check_in_at,
+                'checked_out' => (bool) $row->check_out_at,
+                'check_in_otp' => $showOtps ? $row->check_in_otp : null,
+                'check_out_otp' => $showOtps ? $row->check_out_otp : null,
+            ]);
+            $this->unsetRelation('vendorAttendance');
+
+            return $this;
+        }
+
+        $crew = collect($this->getAttribute('client_crew') ?? [])
+            ->filter(fn (array $member) => ! empty($member['attendance']));
+
+        if ($crew->count() === 1) {
+            $att = $crew->first()['attendance'];
+            $this->setAttribute('vendor_attendance', [
+                'check_in_at' => $att['check_in_at'] ?? null,
+                'check_out_at' => $att['check_out_at'] ?? null,
+                'checked_in' => ! empty($att['check_in_at']),
+                'checked_out' => ! empty($att['check_out_at']),
+                'check_in_otp' => $showOtps ? ($att['check_in_otp'] ?? null) : null,
+                'check_out_otp' => $showOtps ? ($att['check_out_otp'] ?? null) : null,
+            ]);
+        } else {
+            $this->setAttribute('vendor_attendance', null);
+        }
+
         $this->unsetRelation('vendorAttendance');
+
+        return $this;
+    }
+
+    public function presentClientCrew(bool $showOtps = false): static
+    {
+        $matchMode = app(\App\Modules\Catalog\Services\ProviderTypes::class)->matchMode($this->provider_type ?: 'caterer');
+        if ($matchMode !== 'worker') {
+            $this->setAttribute('client_crew', []);
+
+            return $this;
+        }
+
+        $this->loadMissing(['assignments.worker', 'assignments.attendance']);
+        $crew = $this->assignments
+            ->whereIn('status', Assignment::COMMITTED)
+            ->values()
+            ->map(fn (Assignment $assignment) => [
+                'id' => $assignment->id,
+                'status' => $assignment->status,
+                'worker' => $assignment->worker ? [
+                    'name' => $assignment->worker->name,
+                    'phone' => $assignment->worker->phone,
+                ] : null,
+                'attendance' => $assignment->attendance ? [
+                    'check_in_at' => $assignment->attendance->check_in_at,
+                    'check_out_at' => $assignment->attendance->check_out_at,
+                    'check_in_otp' => $showOtps ? $assignment->attendance->check_in_otp : null,
+                    'check_out_otp' => $showOtps ? $assignment->attendance->check_out_otp : null,
+                ] : null,
+            ]);
+
+        $this->setAttribute('client_crew', $crew);
+
+        return $this;
+    }
+
+    public function presentWorkerRing(): static
+    {
+        if (app(\App\Modules\Catalog\Services\ProviderTypes::class)->matchMode($this->provider_type ?: 'caterer') !== 'worker') {
+            return $this;
+        }
+
+        $this->loadMissing('assignments');
+        $open = $this->assignments
+            ->where('status', 'invited')
+            ->filter(fn (Assignment $a) => ! $a->expires_at || $a->expires_at->isFuture())
+            ->count();
+        $accepted = $this->assignments
+            ->whereIn('status', Assignment::COMMITTED)
+            ->count();
+
+        $this->setAttribute('worker_ring', [
+            'ringing' => $open > 0 && $accepted < $this->required_workers,
+            'count' => $open,
+            'accepted' => $accepted,
+            'needed' => $this->required_workers,
+        ]);
+        $this->unsetRelation('assignments');
 
         return $this;
     }

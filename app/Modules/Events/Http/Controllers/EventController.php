@@ -24,7 +24,10 @@ class EventController extends Controller
             $query->where('requester_id', $user->id);
         }
 
-        return response()->json($query->latest()->get()->each->presentVendor());
+        return response()->json($query->latest()->get()->each(function (ServiceRequest $row) {
+            $row->presentVendor();
+            $row->presentWorkerRing();
+        }));
     }
 
     public function store(Request $request, CreateEventAction $action): JsonResponse
@@ -46,6 +49,7 @@ class EventController extends Controller
             'shifts.*.rate_per_worker_inr' => ['nullable', 'integer', 'min:100', 'max:50000'],
             'shifts.*.start_at' => ['nullable', 'date'],
             'shifts.*.end_at' => ['nullable', 'date'],
+            'provider_type' => ['nullable', 'string', 'max:32'],
         ]);
 
         return response()->json($action->handle($request->user(), $data), 201);
@@ -85,6 +89,8 @@ class EventController extends Controller
         });
         $event->assignments->each($mask);
         $event->presentVendor();
+        $event->presentClientCrew(! $hideOtp);
+        $event->presentWorkerRing();
         $event->presentAttendance(! $hideOtp);
 
         return response()->json($event);

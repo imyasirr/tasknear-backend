@@ -9,6 +9,7 @@ use App\Modules\Marketplace\Models\CatererProfile;
 use App\Modules\Marketplace\Models\ServiceRequest;
 use App\Modules\Marketplace\Models\VendorAttendance;
 use App\Modules\Marketplace\Models\VendorOffer;
+use App\Modules\Marketplace\Actions\AutoMatchAction;
 use App\Modules\Money\Models\Commission;
 use App\Modules\Money\Models\LedgerEntry;
 use App\Modules\Money\Models\Payment;
@@ -19,6 +20,7 @@ use App\Modules\Ops\Models\NotificationLog;
 use App\Modules\Subscriptions\Models\Subscription;
 use App\Modules\Subscriptions\Models\SubscriptionPlan;
 use App\Modules\Tasks\Models\TaskDetail;
+use App\Modules\Workers\Models\WorkerProfile;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
@@ -67,8 +69,59 @@ class DemoSeeder extends Seeder
             'upi_vpa' => 'nightowl@okaxis',
         ]);
 
+        $rahul = $this->worker('9111111111', 'Rahul Verma', ['loader', 'task-helper', 'driver'], [
+            'bio' => 'Loading and same-day shifting across Lucknow.',
+            'rating_avg' => 4.6,
+            'jobs_completed' => 14,
+            'upi_vpa' => 'rahul@okaxis',
+        ]);
+        $amit = $this->worker('9111111112', 'Amit Singh', ['electrician', 'plumber'], [
+            'role' => 'home_pro',
+            'bio' => 'Home wiring and plumbing — Aliganj & Gomti Nagar.',
+            'rating_avg' => 4.4,
+            'jobs_completed' => 9,
+            'upi_vpa' => 'amit@paytm',
+        ]);
+        $this->worker('9111111113', 'Sana Ali', ['waiter', 'helper', 'cleaner'], [
+            'bio' => 'Event service staff — weekends and evenings.',
+            'rating_avg' => 4.7,
+            'jobs_completed' => 12,
+            'upi_vpa' => 'sana@oksbi',
+        ]);
+
+        $manpower = $this->agency('9222222231', 'Lucknow Manpower Co', ['loader', 'helper', 'waiter'], [
+            'bio' => 'Daily-wage teams for events, loading and lawns.',
+            'rating_avg' => 4.5,
+            'jobs_completed' => 9,
+            'upi_vpa' => 'manpower@okaxis',
+        ]);
+        $swiftTeams = $this->agency('9222222232', 'Swift Event Teams', ['waiter', 'helper', 'security', 'loader'], [
+            'bio' => 'Corporate and wedding crews on short notice.',
+            'rating_avg' => 4.6,
+            'jobs_completed' => 14,
+            'gstin' => '09AABCS9876H1Z8',
+            'upi_vpa' => 'swiftteams@oksbi',
+        ]);
+
+        $vikash = $this->worker('9111111114', 'Vikash Yadav', ['driver', 'delivery-helper'], [
+            'role' => 'driver',
+            'bio' => 'Tempo and pickup runs — shifting and delivery.',
+            'rating_avg' => 4.5,
+            'jobs_completed' => 11,
+            'upi_vpa' => 'vikash@okaxis',
+        ]);
+
+        $deepak = $this->worker('9111111115', 'Deepak Mishra', ['electrician', 'plumber'], [
+            'role' => 'home_pro',
+            'bio' => 'Licensed electrician and plumber — home visits.',
+            'rating_avg' => 4.6,
+            'jobs_completed' => 8,
+            'upi_vpa' => 'deepak@paytm',
+        ]);
+
         $wedding = $this->event($ayesha, [
             'title' => 'Sharma wedding reception',
+            'provider_type' => 'caterer',
             'venue_name' => 'Gomti Nagar banquet',
             'city' => 'Lucknow',
             'address' => 'Gomti Nagar, Lucknow',
@@ -97,6 +150,7 @@ class DemoSeeder extends Seeder
 
         $this->event($ayesha, [
             'title' => 'Corporate lunch — bank office',
+            'provider_type' => 'caterer',
             'venue_name' => 'Hazratganj office',
             'city' => 'Lucknow',
             'address' => 'Hazratganj, Lucknow',
@@ -116,6 +170,7 @@ class DemoSeeder extends Seeder
 
         $tonight = $this->event($ayesha, [
             'title' => 'Tonight banquet service',
+            'provider_type' => 'caterer',
             'venue_name' => 'Indira Nagar lawn',
             'city' => 'Lucknow',
             'address' => 'Indira Nagar, Lucknow',
@@ -141,6 +196,7 @@ class DemoSeeder extends Seeder
 
         $done = $this->event($ayesha, [
             'title' => 'Last week mehendi',
+            'provider_type' => 'caterer',
             'venue_name' => 'Aliganj home',
             'city' => 'Lucknow',
             'address' => 'Aliganj, Lucknow',
@@ -169,6 +225,8 @@ class DemoSeeder extends Seeder
 
         $task = $this->task($vikram, [
             'title' => 'Fridge shift to new flat',
+            'category' => 'loader',
+            'provider_type' => 'caterer',
             'description' => 'Need 2 people to move a double-door fridge down one floor.',
             'city' => 'Lucknow',
             'pickup' => 'Aliganj Sector H',
@@ -189,12 +247,127 @@ class DemoSeeder extends Seeder
         $this->notify($banquet, 'vendor.ringing', $task);
         $this->notify($loaders, 'vendor.ringing', $task);
 
+        $workerTask = $this->task($vikram, [
+            'title' => 'Ceiling fan + wiring fix',
+            'category' => 'electrician',
+            'provider_type' => 'worker',
+            'description' => 'Two ceiling fans wobble — need wiring check and mount fix.',
+            'city' => 'Lucknow',
+            'pickup' => 'Aliganj Sector H',
+            'drop' => 'Same flat',
+            'start' => now()->addDays(2)->setTime(11, 0),
+            'end' => now()->addDays(2)->setTime(13, 0),
+            'headcount' => 1,
+            'status' => 'matching',
+            'history' => [
+                [null, 'draft', 'Task created'],
+                ['draft', 'awaiting_payment', 'Deposit raised'],
+                ['awaiting_payment', 'matching', 'Paid. Ringing nearby workers'],
+            ],
+        ], paid: true);
+        app(AutoMatchAction::class)->handle($workerTask->fresh(['taskDetail', 'eventDetail.shifts']), $vikram);
+
+        $agencyEvent = $this->event($vikram, [
+            'title' => 'Office lawn setup — annual day',
+            'provider_type' => 'agency',
+            'venue_name' => 'Alambagh corporate park',
+            'city' => 'Lucknow',
+            'address' => 'Alambagh, Lucknow',
+            'guest_count' => 200,
+            'start' => now()->addDays(3)->setTime(9, 0),
+            'end' => now()->addDays(3)->setTime(18, 0),
+            'status' => 'matching',
+            'notes' => 'Need loaders and helpers for stage setup.',
+            'shifts' => [
+                ['slug' => 'loader', 'headcount' => 4],
+                ['slug' => 'helper', 'headcount' => 6],
+                ['slug' => 'security', 'headcount' => 2],
+            ],
+            'history' => [
+                [null, 'draft', 'Event created'],
+                ['draft', 'awaiting_payment', 'Deposit raised'],
+                ['awaiting_payment', 'matching', 'Paid. Ringing manpower agencies'],
+            ],
+        ], paid: true);
+        $this->offer($agencyEvent, $manpower, $admin, 'invited', minutes: 40);
+        $this->offer($agencyEvent, $swiftTeams, $admin, 'invited', minutes: 40);
+        $this->notify($manpower, 'vendor.ringing', $agencyEvent);
+        $this->notify($swiftTeams, 'vendor.ringing', $agencyEvent);
+
+        $driverTask = $this->task($ayesha, [
+            'title' => 'Sofa delivery — Gomti to Aliganj',
+            'category' => 'driver',
+            'provider_type' => 'driver',
+            'description' => 'Pickup sofa from store, deliver to 2nd floor walk-up.',
+            'city' => 'Lucknow',
+            'pickup' => 'Gomti Nagar furniture market',
+            'drop' => 'Aliganj Sector D',
+            'start' => now()->addDays(1)->setTime(15, 0),
+            'end' => now()->addDays(1)->setTime(17, 0),
+            'headcount' => 1,
+            'status' => 'matching',
+            'history' => [
+                [null, 'draft', 'Task created'],
+                ['draft', 'awaiting_payment', 'Deposit raised'],
+                ['awaiting_payment', 'matching', 'Paid. Ringing driver partners'],
+            ],
+        ], paid: true);
+        app(AutoMatchAction::class)->handle($driverTask->fresh(['taskDetail', 'eventDetail.shifts']), $ayesha);
+
+        $plumberTask = $this->task($ayesha, [
+            'title' => 'Bathroom leak — urgent fix',
+            'category' => 'plumber',
+            'provider_type' => 'home_pro',
+            'description' => 'Ceiling drip from upstairs bathroom. Need same-day visit.',
+            'city' => 'Lucknow',
+            'pickup' => 'Indira Nagar Block B',
+            'drop' => 'Same flat',
+            'start' => now()->addDay()->setTime(9, 0),
+            'end' => now()->addDay()->setTime(11, 0),
+            'headcount' => 1,
+            'status' => 'matching',
+            'history' => [
+                [null, 'draft', 'Task created'],
+                ['draft', 'awaiting_payment', 'Deposit raised'],
+                ['awaiting_payment', 'matching', 'Paid. Ringing home service pros'],
+            ],
+        ], paid: true);
+        app(AutoMatchAction::class)->handle($plumberTask->fresh(['taskDetail', 'eventDetail.shifts']), $ayesha);
+
+        $helperTask = $this->task($vikram, [
+            'title' => 'Pack boxes before shifting',
+            'category' => 'task-helper',
+            'provider_type' => 'worker',
+            'description' => 'Need 2 helpers for 3 hours to pack kitchen and books.',
+            'city' => 'Lucknow',
+            'pickup' => 'Mahanagar apartment',
+            'drop' => 'Same building',
+            'start' => now()->addDays(2)->setTime(14, 0),
+            'end' => now()->addDays(2)->setTime(17, 0),
+            'headcount' => 2,
+            'status' => 'matching',
+            'history' => [
+                [null, 'draft', 'Task created'],
+                ['draft', 'awaiting_payment', 'Deposit raised'],
+                ['awaiting_payment', 'matching', 'Paid. Ringing nearby workers'],
+            ],
+        ], paid: true);
+        app(AutoMatchAction::class)->handle($helperTask->fresh(['taskDetail', 'eventDetail.shifts']), $vikram);
+
         AuditLog::query()->create([
             'actor_id' => $admin->id,
             'action' => 'demo.seeded',
             'subject_type' => ServiceRequest::class,
             'subject_id' => $wedding->id,
-            'payload' => ['note' => 'Client + caterer marketplace demo loaded'],
+            'payload' => [
+                'note' => 'Full marketplace demo — caterer, agency, worker, driver, home_pro',
+                'clients' => 2,
+                'caterers' => 5,
+                'agencies' => 2,
+                'workers' => 3,
+                'drivers' => 1,
+                'home_pros' => 2,
+            ],
         ]);
     }
 
@@ -235,9 +408,9 @@ class DemoSeeder extends Seeder
         return $user;
     }
 
-    private function caterer(string $phone, string $name, array $skills, array $extra = []): User
+    private function caterer(string $phone, string $name, array $skills, array $extra = [], string $role = 'caterer'): User
     {
-        $user = $this->user($phone, $name, 'caterer', 'Lucknow');
+        $user = $this->user($phone, $name, $role, 'Lucknow');
         $profile = CatererProfile::query()->updateOrCreate(
             ['user_id' => $user->id],
             [
@@ -259,6 +432,37 @@ class DemoSeeder extends Seeder
         }
 
         return $user->fresh('catererProfile');
+    }
+
+    private function agency(string $phone, string $name, array $skills, array $extra = []): User
+    {
+        return $this->caterer($phone, $name, $skills, $extra, 'agency');
+    }
+
+    private function worker(string $phone, string $name, array $skills, array $extra = []): User
+    {
+        $role = $extra['role'] ?? 'worker';
+        unset($extra['role']);
+        $user = $this->user($phone, $name, $role, 'Lucknow');
+        $profile = WorkerProfile::query()->updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'bio' => $extra['bio'] ?? $name.' — Lucknow worker',
+                'city' => 'Lucknow',
+                'upi_vpa' => $extra['upi_vpa'] ?? null,
+                'rating_avg' => $extra['rating_avg'] ?? 4.2,
+                'jobs_completed' => $extra['jobs_completed'] ?? 4,
+                'status' => $extra['status'] ?? 'active',
+                'is_available' => $extra['is_available'] ?? true,
+            ]
+        );
+        $ids = Category::query()->whereIn('slug', $skills)->pluck('id');
+        $profile->skills()->whereNotIn('category_id', $ids)->delete();
+        foreach ($ids as $id) {
+            $profile->skills()->firstOrCreate(['category_id' => $id]);
+        }
+
+        return $user->fresh('workerProfile');
     }
 
     private function offer(
@@ -301,6 +505,7 @@ class DemoSeeder extends Seeder
         $request = ServiceRequest::query()->create([
             'requester_id' => $client->id,
             'type' => 'event',
+            'provider_type' => $data['provider_type'] ?? 'caterer',
             'slug' => ServiceRequest::uniqueSlug($data['title']),
             'city' => $data['city'],
             'address' => $data['address'],
@@ -347,12 +552,14 @@ class DemoSeeder extends Seeder
 
     private function task(User $client, array $data, bool $paid): ServiceRequest
     {
-        $cat = Category::query()->where('slug', 'loader')->firstOrFail();
-        $headcount = (int) $data['headcount'];
+        $slug = $data['category'] ?? 'loader';
+        $cat = Category::query()->where('slug', $slug)->firstOrFail();
+        $headcount = (int) ($data['headcount'] ?? 1);
         $budget = $cat->default_rate_inr * $headcount;
         $request = ServiceRequest::query()->create([
             'requester_id' => $client->id,
             'type' => 'task',
+            'provider_type' => $data['provider_type'] ?? 'caterer',
             'slug' => ServiceRequest::uniqueSlug($data['title']),
             'city' => $data['city'],
             'address' => $data['pickup'],
@@ -365,11 +572,12 @@ class DemoSeeder extends Seeder
         ]);
         TaskDetail::query()->create([
             'service_request_id' => $request->id,
+            'category_id' => $cat->id,
             'title' => $data['title'],
             'description' => $data['description'],
             'pickup_address' => $data['pickup'],
             'drop_address' => $data['drop'],
-            'duration_minutes' => 120,
+            'duration_minutes' => $cat->default_duration_minutes,
             'rate_per_worker_inr' => $cat->default_rate_inr,
             'proof_required' => false,
         ]);

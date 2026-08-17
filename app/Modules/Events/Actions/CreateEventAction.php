@@ -4,6 +4,7 @@ namespace App\Modules\Events\Actions;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\Category;
+use App\Modules\Catalog\Services\ProviderTypes;
 use App\Modules\Events\Models\EventDetail;
 use App\Modules\Marketplace\Models\ServiceRequest;
 use App\Modules\Money\Actions\SettlePaymentAction;
@@ -23,11 +24,14 @@ class CreateEventAction
     public function handle(User $client, array $data): ServiceRequest
     {
         $client->assignRole('customer');
+        $providerType = $data['provider_type'] ?? 'caterer';
+        app(ProviderTypes::class)->assertActive($providerType);
 
-        return DB::transaction(function () use ($client, $data) {
+        return DB::transaction(function () use ($client, $data, $providerType) {
             $request = ServiceRequest::query()->create([
                 'requester_id' => $client->id,
                 'type' => 'event',
+                'provider_type' => $providerType,
                 'slug' => ServiceRequest::uniqueSlug($data['title']),
                 'city' => $data['city'],
                 'address' => $data['address'] ?? null,
@@ -51,6 +55,11 @@ class CreateEventAction
 
             foreach ($data['shifts'] as $shift) {
                 $category = Category::query()->findOrFail($shift['category_id']);
+                if (! in_array($category->vertical, ['event', 'both'], true)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'shifts' => 'One or more categories are not available for events.',
+                    ]);
+                }
                 $headcount = (int) $shift['headcount'];
                 $rate = (int) ($shift['rate_per_worker_inr'] ?? $category->default_rate_inr);
                 if ($rate < 100) {
@@ -89,6 +98,7 @@ class CreateEventAction
 
             $request->transitionTo('awaiting_payment', $client, 'Event created');
             $this->auditor->record($client, 'event.created', $request, [
+                'provider_type' => $providerType,
                 'budget_inr' => $budget,
                 'required_workers' => $workers,
             ]);

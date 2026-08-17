@@ -1,9 +1,12 @@
 <?php
 
+use App\Modules\Catalog\Http\Controllers\AdminProviderTypeController;
 use App\Modules\Catalog\Http\Controllers\CategoryController;
+use App\Modules\Catalog\Http\Controllers\ProviderTypeController;
 use App\Modules\Catalog\Http\Controllers\CityController;
 use App\Modules\Events\Http\Controllers\EventController;
 use App\Modules\Identity\Http\Controllers\AuthController;
+use App\Modules\Marketplace\Http\Controllers\AssignmentController;
 use App\Modules\Marketplace\Http\Controllers\CatererProfileController;
 use App\Modules\Marketplace\Http\Controllers\VendorOfferController;
 use App\Modules\Money\Http\Controllers\CatererPayoutController;
@@ -14,6 +17,7 @@ use App\Modules\Subscriptions\Http\Controllers\AdminSubscriptionController;
 use App\Modules\Subscriptions\Http\Controllers\SubscriptionController;
 use App\Modules\Tasks\Http\Controllers\TaskController;
 use App\Modules\Trust\Http\Controllers\TrustController;
+use App\Modules\Workers\Http\Controllers\WorkerProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -22,6 +26,7 @@ Route::prefix('v1')->group(function () {
     Route::post('auth/register', [AuthController::class, 'register']);
     Route::post('auth/login', [AuthController::class, 'loginWithPassword']);
     Route::get('categories', [CategoryController::class, 'index']);
+    Route::get('provider-types', [ProviderTypeController::class, 'index']);
     Route::get('cities', [CityController::class, 'index']);
 
     Route::middleware('auth:sanctum')->group(function () {
@@ -44,6 +49,19 @@ Route::prefix('v1')->group(function () {
         Route::post('caterer/offers/{offer}/check-out', [VendorOfferController::class, 'checkOut']);
         Route::get('caterer/payouts', [CatererPayoutController::class, 'index']);
         Route::post('caterer/payouts/{payout}/confirm', [CatererPayoutController::class, 'confirm']);
+
+        Route::get('worker/profile', [WorkerProfileController::class, 'show']);
+        Route::post('worker/profile', [WorkerProfileController::class, 'upsert']);
+        Route::post('worker/skills', [WorkerProfileController::class, 'skills']);
+        Route::post('worker/availability', [WorkerProfileController::class, 'availability']);
+        Route::post('worker/documents', [WorkerProfileController::class, 'documents']);
+        Route::get('worker/jobs', [AssignmentController::class, 'mine']);
+        Route::get('worker/jobs/{assignment}', [AssignmentController::class, 'show']);
+        Route::post('worker/jobs/{assignment}/accept', [AssignmentController::class, 'accept']);
+        Route::post('worker/jobs/{assignment}/decline', [AssignmentController::class, 'decline']);
+        Route::post('worker/jobs/{assignment}/check-in', [AssignmentController::class, 'checkIn']);
+        Route::post('worker/jobs/{assignment}/check-out', [AssignmentController::class, 'checkOut']);
+
         Route::get('events', [EventController::class, 'index']);
         Route::post('events', [EventController::class, 'store']);
         Route::get('events/{event}', [EventController::class, 'show']);
@@ -88,6 +106,12 @@ Route::prefix('v1')->group(function () {
             Route::get('cities', [CityController::class, 'adminIndex']);
             Route::post('cities', [CityController::class, 'store']);
             Route::put('cities/{city}', [CityController::class, 'update']);
+            Route::get('categories', [CategoryController::class, 'adminIndex']);
+            Route::post('categories', [CategoryController::class, 'store']);
+            Route::put('categories/{category}', [CategoryController::class, 'update']);
+            Route::get('provider-types', [AdminProviderTypeController::class, 'index']);
+            Route::post('provider-types', [AdminProviderTypeController::class, 'store']);
+            Route::put('provider-types/{providerType}', [AdminProviderTypeController::class, 'update']);
             Route::get('billing', [AdminSubscriptionController::class, 'settings']);
             Route::put('billing', [AdminSubscriptionController::class, 'updateSettings']);
             Route::get('matching', [AdminMatchingController::class, 'show']);

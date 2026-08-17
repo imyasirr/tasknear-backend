@@ -32,7 +32,6 @@ class WorkerProfileController extends Controller
         ]);
 
         $user = $request->user();
-        $user->assignRole('worker');
 
         $profile = WorkerProfile::query()->firstOrCreate(
             ['user_id' => $user->id],

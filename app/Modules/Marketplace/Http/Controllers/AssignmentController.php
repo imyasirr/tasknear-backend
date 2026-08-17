@@ -39,6 +39,23 @@ class AssignmentController extends Controller
         return response()->json($jobs);
     }
 
+    public function show(Request $request, Assignment $assignment): JsonResponse
+    {
+        $this->assertOwner($request, $assignment);
+
+        $assignment->load([
+            'serviceRequest.eventDetail.shifts.category',
+            'serviceRequest.taskDetail.category',
+            'serviceRequest.requester',
+            'serviceRequest.payments',
+            'shift.category',
+            'attendance',
+            'payout',
+        ]);
+
+        return response()->json($assignment);
+    }
+
     public function accept(Request $request, Assignment $assignment, Auditor $auditor, AutoMatchAction $match): JsonResponse
     {
         $this->assertOwner($request, $assignment);

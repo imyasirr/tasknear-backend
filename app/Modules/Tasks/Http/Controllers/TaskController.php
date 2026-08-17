@@ -17,13 +17,16 @@ class TaskController extends Controller
         $user = $request->user();
         $query = ServiceRequest::query()
             ->where('type', 'task')
-            ->with(['taskDetail', 'payments', 'assignments.worker', 'vendor.catererProfile', 'vendorOffers']);
+            ->with(['taskDetail.category', 'payments', 'assignments.worker', 'vendor.catererProfile', 'vendorOffers']);
 
         if (! $user->hasRole('admin')) {
             $query->where('requester_id', $user->id);
         }
 
-        return response()->json($query->latest()->get()->each->presentVendor());
+        return response()->json($query->latest()->get()->each(function (ServiceRequest $row) {
+            $row->presentVendor();
+            $row->presentWorkerRing();
+        }));
     }
 
     public function store(Request $request, CreateTaskAction $action): JsonResponse
@@ -42,6 +45,7 @@ class TaskController extends Controller
             'duration_minutes' => ['nullable', 'integer', 'min:15'],
             'proof_required' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string'],
+            'provider_type' => ['nullable', 'string', 'max:32'],
         ]);
 
         return response()->json($action->handle($request->user(), $data), 201);
@@ -61,7 +65,7 @@ class TaskController extends Controller
         $match->closeUnfilledBookings();
         $task->refresh();
 
-        $task->load(['taskDetail', 'payments', 'assignments.worker.workerProfile', 'assignments.attendance', 'vendor.catererProfile', 'vendorOffers', 'vendorAttendance', 'payouts']);
+        $task->load(['taskDetail.category', 'payments', 'assignments.worker.workerProfile', 'assignments.attendance', 'vendor.catererProfile', 'vendorOffers', 'vendorAttendance', 'payouts']);
 
         $task->assignments->each(function ($assignment) {
             if ($assignment->status === 'invited') {
@@ -77,6 +81,8 @@ class TaskController extends Controller
         }
 
         $task->presentVendor();
+        $task->presentClientCrew(! $hideOtp);
+        $task->presentWorkerRing();
         $task->presentAttendance(! $hideOtp);
 
         return response()->json($task);

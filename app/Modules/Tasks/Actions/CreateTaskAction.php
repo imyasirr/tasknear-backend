@@ -4,6 +4,7 @@ namespace App\Modules\Tasks\Actions;
 
 use App\Models\User;
 use App\Modules\Catalog\Models\Category;
+use App\Modules\Catalog\Services\ProviderTypes;
 use App\Modules\Marketplace\Models\ServiceRequest;
 use App\Modules\Money\Actions\SettlePaymentAction;
 use App\Modules\Money\Models\Payment;
@@ -23,7 +24,15 @@ class CreateTaskAction
     public function handle(User $client, array $data): ServiceRequest
     {
         $client->assignRole('customer');
+        $providerType = $data['provider_type'] ?? 'caterer';
+        app(ProviderTypes::class)->assertActive($providerType);
+
         $category = Category::query()->findOrFail($data['category_id']);
+        if (! in_array($category->vertical, ['task', 'both'], true)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'category_id' => 'This category is not available for one-off tasks.',
+            ]);
+        }
         $workers = (int) ($data['required_workers'] ?? 1);
         $rate = (int) ($data['rate_per_worker_inr'] ?? $category->default_rate_inr);
         if ($rate < 100) {
@@ -36,6 +45,7 @@ class CreateTaskAction
             $request = ServiceRequest::query()->create([
                 'requester_id' => $client->id,
                 'type' => 'task',
+                'provider_type' => $providerType,
                 'slug' => ServiceRequest::uniqueSlug($data['title']),
                 'city' => $data['city'],
                 'address' => $data['pickup_address'] ?? $data['address'] ?? null,
@@ -49,6 +59,7 @@ class CreateTaskAction
 
             TaskDetail::query()->create([
                 'service_request_id' => $request->id,
+                'category_id' => $category->id,
                 'title' => $data['title'],
                 'description' => $data['description'] ?? null,
                 'pickup_address' => $data['pickup_address'] ?? null,
@@ -74,16 +85,17 @@ class CreateTaskAction
             $request->transitionTo('awaiting_payment', $client, 'Task created');
             $this->auditor->record($client, 'task.created', $request, [
                 'category' => $category->slug,
+                'provider_type' => $providerType,
                 'budget_inr' => $budget,
             ]);
 
-            $created = $request->fresh(['taskDetail', 'payments']);
+            $created = $request->fresh(['taskDetail.category', 'payments']);
             $payment = $created->payments->first();
             if ($payment) {
                 $this->settle->handle($payment, $client);
             }
 
-            return $created->fresh(['taskDetail', 'payments', 'assignments.worker']);
+            return $created->fresh(['taskDetail.category', 'payments', 'assignments.worker']);
         });
     }
 }

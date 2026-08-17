@@ -2,6 +2,7 @@
 
 namespace App\Modules\Tasks\Models;
 
+use App\Modules\Catalog\Models\Category;
 use App\Modules\Marketplace\Models\ServiceRequest;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,7 @@ class TaskDetail extends Model
 {
     protected $fillable = [
         'service_request_id',
+        'category_id',
         'title',
         'description',
         'pickup_address',
@@ -29,5 +31,10 @@ class TaskDetail extends Model
     public function serviceRequest(): BelongsTo
     {
         return $this->belongsTo(ServiceRequest::class);
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
     }
 }
