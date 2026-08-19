@@ -84,6 +84,7 @@ class TaskController extends Controller
         $task->presentClientCrew(! $hideOtp);
         $task->presentWorkerRing();
         $task->presentAttendance(! $hideOtp);
+        $task->presentMyRatings($user);
 
         return response()->json($task);
     }

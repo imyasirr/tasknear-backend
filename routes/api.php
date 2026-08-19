@@ -10,6 +10,7 @@ use App\Modules\Marketplace\Http\Controllers\AssignmentController;
 use App\Modules\Marketplace\Http\Controllers\CatererProfileController;
 use App\Modules\Marketplace\Http\Controllers\VendorOfferController;
 use App\Modules\Money\Http\Controllers\CatererPayoutController;
+use App\Modules\Money\Http\Controllers\CheckoutController;
 use App\Modules\Money\Http\Controllers\PaymentController;
 use App\Modules\Ops\Http\Controllers\AdminController;
 use App\Modules\Ops\Http\Controllers\AdminMatchingController;
@@ -61,12 +62,18 @@ Route::prefix('v1')->group(function () {
         Route::post('worker/jobs/{assignment}/decline', [AssignmentController::class, 'decline']);
         Route::post('worker/jobs/{assignment}/check-in', [AssignmentController::class, 'checkIn']);
         Route::post('worker/jobs/{assignment}/check-out', [AssignmentController::class, 'checkOut']);
+        Route::get('worker/earnings', [PaymentController::class, 'earnings']);
+        Route::post('worker/payouts/{payout}/confirm', [PaymentController::class, 'confirm']);
+        Route::post('worker/payouts/{payout}/dispute', [PaymentController::class, 'dispute']);
 
         Route::get('events', [EventController::class, 'index']);
         Route::post('events', [EventController::class, 'store']);
         Route::get('events/{event}', [EventController::class, 'show']);
         Route::post('events/{event}/repost', [EventController::class, 'repost']);
 
+        Route::get('checkout/config', [CheckoutController::class, 'config']);
+        Route::post('checkout/verify', [CheckoutController::class, 'verify']);
+        Route::post('payments/{payment}/checkout', [CheckoutController::class, 'bookingCheckout']);
         Route::post('payments/{payment}/dev-pay', [PaymentController::class, 'devPay']);
         Route::post('ratings', [TrustController::class, 'rate']);
         Route::post('reports', [TrustController::class, 'report']);
@@ -78,6 +85,7 @@ Route::prefix('v1')->group(function () {
         Route::get('pricing/quote', [SubscriptionController::class, 'quote']);
         Route::get('subscription-plans', [SubscriptionController::class, 'plans']);
         Route::get('me/subscription', [SubscriptionController::class, 'mine']);
+        Route::post('subscription-plans/{plan}/checkout', [CheckoutController::class, 'subscriptionCheckout']);
         Route::post('subscription-plans/{plan}/buy', [SubscriptionController::class, 'buy']);
 
         Route::middleware('role:admin')->prefix('admin')->group(function () {

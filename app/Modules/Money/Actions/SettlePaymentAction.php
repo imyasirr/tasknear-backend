@@ -41,6 +41,7 @@ class SettlePaymentAction
             $payment->update([
                 'status' => 'paid',
                 'paid_at' => now(),
+                'gateway' => $payment->gateway ?: 'manual',
                 'gateway_payment_id' => $payment->gateway_payment_id ?: 'dev-'.now()->timestamp,
                 'labor_inr' => $labor,
                 'commission_inr' => $commissionAmount,

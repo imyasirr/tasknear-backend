@@ -20,6 +20,7 @@ class Payment extends Model
         'fee_waived',
         'subscription_id',
         'gateway',
+        'gateway_order_id',
         'gateway_payment_id',
         'status',
         'paid_at',

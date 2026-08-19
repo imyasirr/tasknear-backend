@@ -7,7 +7,6 @@ use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Services\ProviderTypes;
 use App\Modules\Events\Models\EventDetail;
 use App\Modules\Marketplace\Models\ServiceRequest;
-use App\Modules\Money\Actions\SettlePaymentAction;
 use App\Modules\Money\Models\Payment;
 use App\Modules\Money\Services\Pricing;
 use App\Modules\Ops\Services\Auditor;
@@ -17,7 +16,6 @@ class CreateEventAction
 {
     public function __construct(
         private Auditor $auditor,
-        private SettlePaymentAction $settle,
         private Pricing $pricing,
     ) {}
 
@@ -103,13 +101,7 @@ class CreateEventAction
                 'required_workers' => $workers,
             ]);
 
-            $created = $request->fresh(['eventDetail.shifts.category', 'payments']);
-            $payment = $created->payments->first();
-            if ($payment) {
-                $this->settle->handle($payment, $client);
-            }
-
-            return $created->fresh(['eventDetail.shifts.category', 'eventDetail.shifts.assignments.worker', 'payments', 'assignments.worker']);
+            return $request->fresh(['eventDetail.shifts.category', 'eventDetail.shifts.assignments.worker', 'payments', 'assignments.worker']);
         });
     }
 }

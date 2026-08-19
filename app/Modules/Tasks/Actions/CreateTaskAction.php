@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Modules\Catalog\Models\Category;
 use App\Modules\Catalog\Services\ProviderTypes;
 use App\Modules\Marketplace\Models\ServiceRequest;
-use App\Modules\Money\Actions\SettlePaymentAction;
 use App\Modules\Money\Models\Payment;
 use App\Modules\Money\Services\Pricing;
 use App\Modules\Ops\Services\Auditor;
@@ -17,7 +16,6 @@ class CreateTaskAction
 {
     public function __construct(
         private Auditor $auditor,
-        private SettlePaymentAction $settle,
         private Pricing $pricing,
     ) {}
 
@@ -89,13 +87,7 @@ class CreateTaskAction
                 'budget_inr' => $budget,
             ]);
 
-            $created = $request->fresh(['taskDetail.category', 'payments']);
-            $payment = $created->payments->first();
-            if ($payment) {
-                $this->settle->handle($payment, $client);
-            }
-
-            return $created->fresh(['taskDetail.category', 'payments', 'assignments.worker']);
+            return $request->fresh(['taskDetail.category', 'payments', 'assignments.worker']);
         });
     }
 }

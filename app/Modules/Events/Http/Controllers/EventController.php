@@ -92,6 +92,7 @@ class EventController extends Controller
         $event->presentClientCrew(! $hideOtp);
         $event->presentWorkerRing();
         $event->presentAttendance(! $hideOtp);
+        $event->presentMyRatings($request->user());
 
         return response()->json($event);
     }

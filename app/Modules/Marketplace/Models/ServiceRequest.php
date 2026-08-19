@@ -7,6 +7,7 @@ use App\Modules\Events\Models\EventDetail;
 use App\Modules\Marketplace\Models\Assignment;
 use App\Modules\Money\Models\Payment;
 use App\Modules\Tasks\Models\TaskDetail;
+use App\Modules\Trust\Models\Rating;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -234,6 +235,7 @@ class ServiceRequest extends Model
                 'id' => $assignment->id,
                 'status' => $assignment->status,
                 'worker' => $assignment->worker ? [
+                    'id' => $assignment->worker->id,
                     'name' => $assignment->worker->name,
                     'phone' => $assignment->worker->phone,
                 ] : null,
@@ -272,6 +274,18 @@ class ServiceRequest extends Model
             'needed' => $this->required_workers,
         ]);
         $this->unsetRelation('assignments');
+
+        return $this;
+    }
+
+    public function presentMyRatings(User $viewer): static
+    {
+        $ratings = Rating::query()
+            ->where('service_request_id', $this->id)
+            ->where('rater_id', $viewer->id)
+            ->get(['ratee_id', 'assignment_id', 'stars', 'comment']);
+
+        $this->setAttribute('my_ratings', $ratings);
 
         return $this;
     }
