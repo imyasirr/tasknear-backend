@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Modules\Identity\Models\UserRole;
 use App\Modules\Marketplace\Models\CatererProfile;
 use App\Modules\Subscriptions\Models\Subscription;
+use App\Modules\Venues\Models\VenuePartnerProfile;
 use App\Modules\Workers\Models\WorkerProfile;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -57,6 +58,11 @@ class User extends Authenticatable
     public function catererProfile(): HasOne
     {
         return $this->hasOne(CatererProfile::class);
+    }
+
+    public function venuePartnerProfile(): HasOne
+    {
+        return $this->hasOne(VenuePartnerProfile::class);
     }
 
     public function subscriptions(): HasMany

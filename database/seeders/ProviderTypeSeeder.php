@@ -65,6 +65,17 @@ class ProviderTypeSeeder extends Seeder
                 'category_slugs' => ['electrician', 'plumber'],
                 'sort_order' => 5,
             ],
+            [
+                'slug' => 'venue_partner',
+                'role' => 'venue_partner',
+                'match_mode' => 'venue',
+                'name' => 'Venue partner',
+                'name_hi' => 'वेन्यू पार्टनर',
+                'description' => 'List lawn or banquet halls with slots, gallery and online booking.',
+                'description_hi' => 'लawn या बैंक्वेट हॉल लिस्ट करें — स्लॉट, गैलरी और ऑनलाइन बुकिंग।',
+                'category_slugs' => [],
+                'sort_order' => 6,
+            ],
         ];
 
         foreach ($rows as $row) {

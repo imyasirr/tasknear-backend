@@ -5,6 +5,7 @@ namespace App\Modules\Money\Services;
 use App\Models\User;
 use App\Modules\Subscriptions\Models\PlatformSetting;
 use App\Modules\Subscriptions\Models\Subscription;
+use Illuminate\Validation\ValidationException;
 
 class Pricing
 {
@@ -31,6 +32,20 @@ class Pricing
             ->first();
 
         return $sub;
+    }
+
+    public function assertCanPurchasePlan(User $client): void
+    {
+        $active = $this->activeSubscription($client);
+        if (! $active) {
+            return;
+        }
+
+        $until = $active->ends_at?->timezone(config('app.timezone'))->format('M j, Y g:i A') ?: 'later';
+
+        throw ValidationException::withMessages([
+            'plan' => "You already have {$active->plan?->name} active until {$until}. Buy again after it ends.",
+        ]);
     }
 
     /** @return array{labor_inr:int,commission_bps:int,commission_inr:int,total_inr:int,fee_waived:bool,subscription_id:?int,plan_name:?string} */

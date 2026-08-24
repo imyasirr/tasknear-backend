@@ -46,12 +46,15 @@ class ProviderTypes
     /** @return list<string> */
     public function registerRoles(): array
     {
-        return $this->active()
-            ->pluck('role')
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
+        return array_values(array_unique(array_merge(
+            ['venue_partner'],
+            $this->active()
+                ->pluck('role')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all(),
+        )));
     }
 
     public function isActive(string $slug): bool
@@ -70,7 +73,7 @@ class ProviderTypes
 
     public function assertRegisterRole(string $role): void
     {
-        if ($role === 'customer') {
+        if ($role === 'customer' || $role === 'venue_partner') {
             return;
         }
 

@@ -4,6 +4,7 @@ namespace App\Modules\Money\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Money\Actions\SettlePaymentAction;
+use App\Modules\Venues\Actions\SettleVenueBookingPaymentAction;
 use App\Modules\Money\Models\Payment;
 use App\Modules\Money\Models\Payout;
 use App\Modules\Ops\Services\Auditor;
@@ -14,8 +15,12 @@ use Illuminate\Validation\ValidationException;
 
 class PaymentController extends Controller
 {
-    public function devPay(Request $request, Payment $payment, SettlePaymentAction $settle): JsonResponse
-    {
+    public function devPay(
+        Request $request,
+        Payment $payment,
+        SettlePaymentAction $settle,
+        SettleVenueBookingPaymentAction $settleVenue,
+    ): JsonResponse {
         if (! app()->environment('local')) {
             abort(404);
         }
@@ -23,6 +28,10 @@ class PaymentController extends Controller
         $user = $request->user();
         if ($payment->payer_id !== $user->id && ! $user->hasRole('admin')) {
             abort(403);
+        }
+
+        if ($payment->serviceRequest?->type === 'venue') {
+            return response()->json($settleVenue->handle($payment, $user));
         }
 
         return response()->json($settle->handle($payment, $user));

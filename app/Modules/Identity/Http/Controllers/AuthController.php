@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Modules\Catalog\Services\ProviderTypes;
 use App\Modules\Identity\Models\OtpCode;
 use App\Modules\Marketplace\Models\CatererProfile;
+use App\Modules\Venues\Models\VenuePartnerProfile;
 use App\Modules\Workers\Models\WorkerProfile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -105,7 +106,14 @@ class AuthController extends Controller
         ]);
         $user->assignRole($data['role']);
 
-        if ($providers->matchMode($data['role']) === 'vendor') {
+        if ($data['role'] === 'venue_partner') {
+            VenuePartnerProfile::query()->create([
+                'user_id' => $user->id,
+                'company_name' => $data['company_name'] ?: $data['name'],
+                'city' => $data['city'] ?? $user->city,
+                'status' => 'active',
+            ]);
+        } elseif ($providers->matchMode($data['role']) === 'vendor') {
             CatererProfile::query()->create([
                 'user_id' => $user->id,
                 'company_name' => $data['company_name'] ?: $data['name'],
@@ -113,7 +121,7 @@ class AuthController extends Controller
                 'status' => 'active',
                 'is_available' => true,
             ]);
-        } elseif ($data['role'] !== 'customer') {
+        } elseif ($providers->matchMode($data['role']) === 'worker') {
             WorkerProfile::query()->create([
                 'user_id' => $user->id,
                 'bio' => $data['name'],
@@ -123,13 +131,13 @@ class AuthController extends Controller
             ]);
         }
 
-        return $this->tokenResponse($user->fresh(['roles', 'workerProfile', 'catererProfile']));
+        return $this->tokenResponse($user->fresh(['roles', 'workerProfile', 'catererProfile', 'venuePartnerProfile']));
     }
 
     public function me(Request $request): JsonResponse
     {
         return response()->json(
-            $this->userPayload($request->user()->load(['roles', 'workerProfile.skills.category', 'workerProfile.documents', 'catererProfile.skills.category']))
+            $this->userPayload($request->user()->load(['roles', 'workerProfile.skills.category', 'workerProfile.documents', 'catererProfile.skills.category', 'venuePartnerProfile']))
         );
     }
 

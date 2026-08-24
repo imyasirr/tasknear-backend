@@ -19,6 +19,10 @@ use App\Modules\Subscriptions\Http\Controllers\SubscriptionController;
 use App\Modules\Tasks\Http\Controllers\TaskController;
 use App\Modules\Trust\Http\Controllers\TrustController;
 use App\Modules\Workers\Http\Controllers\WorkerProfileController;
+use App\Modules\Venues\Http\Controllers\VenueBookingController;
+use App\Modules\Venues\Http\Controllers\VenueBrowseController;
+use App\Modules\Venues\Http\Controllers\VenueManageController;
+use App\Modules\Venues\Http\Controllers\VenuePartnerProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -87,6 +91,25 @@ Route::prefix('v1')->group(function () {
         Route::get('me/subscription', [SubscriptionController::class, 'mine']);
         Route::post('subscription-plans/{plan}/checkout', [CheckoutController::class, 'subscriptionCheckout']);
         Route::post('subscription-plans/{plan}/buy', [SubscriptionController::class, 'buy']);
+
+        Route::get('venues/meta', [VenueBrowseController::class, 'meta']);
+        Route::get('venues', [VenueBrowseController::class, 'index']);
+        Route::get('venues/{slug}', [VenueBrowseController::class, 'show']);
+        Route::post('venue-bookings', [VenueBookingController::class, 'store']);
+        Route::get('venue-bookings/mine', [VenueBookingController::class, 'mine']);
+        Route::get('venue-bookings/{booking:slug}', [VenueBookingController::class, 'show']);
+
+        Route::get('venue-partner/profile', [VenuePartnerProfileController::class, 'show']);
+        Route::post('venue-partner/profile', [VenuePartnerProfileController::class, 'upsert']);
+        Route::get('venue-partner/venues', [VenueManageController::class, 'index']);
+        Route::post('venue-partner/venues', [VenueManageController::class, 'store']);
+        Route::get('venue-partner/venues/{venue}', [VenueManageController::class, 'show']);
+        Route::put('venue-partner/venues/{venue}', [VenueManageController::class, 'update']);
+        Route::post('venue-partner/venues/{venue}/publish', [VenueManageController::class, 'publish']);
+        Route::post('venue-partner/venues/{venue}/photos', [VenueManageController::class, 'storePhoto']);
+        Route::get('venue-partner/venues/{venue}/calendar', [VenueManageController::class, 'calendar']);
+        Route::get('venue-partner/bookings', [VenueBookingController::class, 'partnerIndex']);
+        Route::post('venue-partner/bookings', [VenueBookingController::class, 'partnerStore']);
 
         Route::middleware('role:admin')->prefix('admin')->group(function () {
             Route::get('dashboard', [AdminController::class, 'dashboard']);

@@ -4,9 +4,11 @@ namespace App\Modules\Money\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Money\Actions\SettlePaymentAction;
+use App\Modules\Venues\Actions\SettleVenueBookingPaymentAction;
 use App\Modules\Money\Models\CheckoutSession;
 use App\Modules\Money\Models\Payment;
 use App\Modules\Money\Services\RazorpayGateway;
+use App\Modules\Money\Services\Pricing;
 use App\Modules\Ops\Services\Auditor;
 use App\Modules\Subscriptions\Models\Subscription;
 use App\Modules\Subscriptions\Models\SubscriptionPlan;
@@ -78,7 +80,7 @@ class CheckoutController extends Controller
         return response()->json($this->checkoutPayload($user, $order, $amountInr, 'Booking deposit'));
     }
 
-    public function subscriptionCheckout(Request $request, SubscriptionPlan $plan, RazorpayGateway $razorpay): JsonResponse
+    public function subscriptionCheckout(Request $request, SubscriptionPlan $plan, RazorpayGateway $razorpay, Pricing $pricing): JsonResponse
     {
         if (! $plan->is_active) {
             throw ValidationException::withMessages(['plan' => 'This plan is not on sale.']);
@@ -89,6 +91,7 @@ class CheckoutController extends Controller
         }
 
         $user = $request->user();
+        $pricing->assertCanPurchasePlan($user);
         $amountInr = (int) $plan->price_inr;
 
         CheckoutSession::query()
@@ -153,11 +156,11 @@ class CheckoutController extends Controller
 
         return DB::transaction(function () use ($request, $data, $session, $settle, $auditor) {
             if ($session->purpose === CheckoutSession::PURPOSE_BOOKING) {
-                return $this->completeBookingCheckout($request, $data, $session, $settle);
+                return $this->completeBookingCheckout($request, $data, $session, $settle, app(SettleVenueBookingPaymentAction::class));
             }
 
             if ($session->purpose === CheckoutSession::PURPOSE_SUBSCRIPTION) {
-                return $this->completeSubscriptionCheckout($request, $data, $session, $auditor);
+                return $this->completeSubscriptionCheckout($request, $data, $session, $auditor, app(Pricing::class));
             }
 
             throw ValidationException::withMessages(['payment' => 'Unknown checkout type.']);
@@ -165,8 +168,13 @@ class CheckoutController extends Controller
     }
 
     /** @param  array<string, string>  $data */
-    private function completeBookingCheckout(Request $request, array $data, CheckoutSession $session, SettlePaymentAction $settle): JsonResponse
-    {
+    private function completeBookingCheckout(
+        Request $request,
+        array $data,
+        CheckoutSession $session,
+        SettlePaymentAction $settle,
+        SettleVenueBookingPaymentAction $settleVenue,
+    ): JsonResponse {
         $payment = Payment::query()->find($session->reference_id);
         if (! $payment) {
             throw ValidationException::withMessages(['payment' => 'Payment record missing.']);
@@ -186,7 +194,9 @@ class CheckoutController extends Controller
             'gateway_payment_id' => $data['razorpay_payment_id'],
         ]);
 
-        $settled = $settle->handle($payment->fresh(), $request->user());
+        $settled = $payment->serviceRequest?->type === 'venue'
+            ? $settleVenue->handle($payment->fresh(), $request->user())
+            : $settle->handle($payment->fresh(), $request->user());
 
         $session->update(['status' => 'completed', 'completed_at' => now()]);
 
@@ -194,7 +204,7 @@ class CheckoutController extends Controller
     }
 
     /** @param  array<string, string>  $data */
-    private function completeSubscriptionCheckout(Request $request, array $data, CheckoutSession $session, Auditor $auditor): JsonResponse
+    private function completeSubscriptionCheckout(Request $request, array $data, CheckoutSession $session, Auditor $auditor, Pricing $pricing): JsonResponse
     {
         $plan = SubscriptionPlan::query()->find($session->reference_id);
         if (! $plan || ! $plan->is_active) {
@@ -203,6 +213,7 @@ class CheckoutController extends Controller
 
         $user = $request->user();
         $user->assignRole('customer');
+        $pricing->assertCanPurchasePlan($user);
 
         Subscription::query()
             ->where('user_id', $user->id)

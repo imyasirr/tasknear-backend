@@ -28,9 +28,12 @@ class SubscriptionController extends Controller
 
     public function mine(Request $request, Pricing $pricing): JsonResponse
     {
+        $active = $pricing->activeSubscription($request->user());
+
         return response()->json([
             'quote' => $pricing->quote($request->user(), 1000),
-            'active' => $pricing->activeSubscription($request->user()),
+            'active' => $active,
+            'can_purchase' => $active === null,
             'history' => Subscription::query()
                 ->with('plan.features')
                 ->where('user_id', $request->user()->id)
@@ -56,6 +59,8 @@ class SubscriptionController extends Controller
 
         $user = $request->user();
         $user->assignRole('customer');
+
+        $pricing->assertCanPurchasePlan($user);
 
         $sub = DB::transaction(function () use ($user, $plan) {
             Subscription::query()
