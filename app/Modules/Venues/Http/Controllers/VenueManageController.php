@@ -5,9 +5,11 @@ namespace App\Modules\Venues\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Venues\Models\Venue;
 use App\Modules\Venues\Models\VenuePhoto;
+use App\Modules\Venues\Support\VenueAmenityPresenter;
 use App\Modules\Venues\Services\VenueAvailabilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -60,7 +62,8 @@ class VenueManageController extends Controller
         $this->assertOwner($request, $venue);
         $venue->loadCount('photos');
 
-        if ($venue->photos_count < 1) {
+        $imageCount = $venue->photos()->where('media_type', 'image')->count();
+        if ($imageCount < 1) {
             throw ValidationException::withMessages(['venue' => 'Add at least one photo before publishing.']);
         }
 
@@ -73,22 +76,50 @@ class VenueManageController extends Controller
     {
         $this->assertOwner($request, $venue);
 
+        $file = $request->file('photo');
+        if (! $file) {
+            throw ValidationException::withMessages(['photo' => 'Choose a photo or video file.']);
+        }
+
+        $mime = (string) $file->getMimeType();
+        $isVideo = str_starts_with($mime, 'video/');
+        $upload = config('venues.upload', []);
+
         $request->validate([
-            'photo' => ['required', 'image', 'max:5120'],
+            'photo' => [
+                'required',
+                'file',
+                $isVideo
+                    ? 'mimes:'.implode(',', $upload['video_mimes'] ?? ['mp4', 'webm', 'mov'])
+                    : 'mimes:'.implode(',', $upload['image_mimes'] ?? ['jpg', 'jpeg', 'png', 'webp']),
+                'max:'.($isVideo ? ($upload['video_max_kb'] ?? 81920) : ($upload['image_max_kb'] ?? 20480)),
+            ],
         ]);
 
-        $path = $request->file('photo')->store('venue-photos/'.$venue->id, 'public');
+        $folder = 'venue-media/'.$venue->id;
+        $path = $file->store($folder, 'public');
         $photo = VenuePhoto::query()->create([
             'venue_id' => $venue->id,
             'path' => $path,
+            'media_type' => $isVideo ? 'video' : 'image',
             'sort_order' => (int) $venue->photos()->max('sort_order') + 1,
         ]);
 
-        return response()->json([
-            'id' => $photo->id,
-            'url' => $photo->url(),
-            'sort_order' => $photo->sort_order,
-        ], 201);
+        return response()->json($photo->toMediaRow(), 201);
+    }
+
+    public function destroyPhoto(Request $request, Venue $venue, VenuePhoto $photo): JsonResponse
+    {
+        $this->assertOwner($request, $venue);
+
+        if ((int) $photo->venue_id !== (int) $venue->id) {
+            abort(404);
+        }
+
+        Storage::disk('public')->delete($photo->path);
+        $photo->delete();
+
+        return response()->json(['message' => 'Photo removed.']);
     }
 
     public function calendar(Request $request, Venue $venue, VenueAvailabilityService $availability): JsonResponse
@@ -104,10 +135,16 @@ class VenueManageController extends Controller
     private function validatedVenue(Request $request): array
     {
         $fields = config('venues.amenity_fields', []);
+        $user = $request->user();
+        $venueType = $this->venueTypeForUser($user);
+
+        if (! $venueType && ! $user->hasRole('admin')) {
+            abort(403, 'Only lawn or banquet partners can manage venues.');
+        }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:160'],
-            'venue_type' => ['required', 'in:lawn,banquet,both'],
+            'venue_type' => [$user->hasRole('admin') ? 'required' : 'prohibited', 'in:lawn,banquet'],
             'description' => ['nullable', 'string', 'max:5000'],
             'address' => ['nullable', 'string', 'max:255'],
             'city' => ['nullable', 'string', 'max:80'],
@@ -116,6 +153,12 @@ class VenueManageController extends Controller
             'advance_percent' => ['nullable', 'integer', 'min:10', 'max:100'],
             'price_per_day_inr' => ['required', 'integer', 'min:500', 'max:5000000'],
             'amenities' => ['nullable', 'array'],
+            'custom_services' => ['nullable', 'array'],
+            'custom_services.*.id' => ['nullable', 'string', 'max:64'],
+            'custom_services.*.name' => ['nullable', 'string', 'max:120'],
+            'custom_services.*.icon' => ['nullable', 'string', 'max:64'],
+            'custom_services.*.note' => ['nullable', 'string', 'max:255'],
+            'custom_services.*.quantity' => ['nullable', 'integer', 'min:0', 'max:100000'],
         ]);
 
         $amenities = [];
@@ -133,7 +176,7 @@ class VenueManageController extends Controller
 
         return [
             'name' => $data['name'],
-            'venue_type' => $data['venue_type'],
+            'venue_type' => $venueType ?? $data['venue_type'],
             'description' => $data['description'] ?? null,
             'address' => $data['address'] ?? null,
             'city' => $data['city'] ?? null,
@@ -142,6 +185,7 @@ class VenueManageController extends Controller
             'advance_percent' => (int) ($data['advance_percent'] ?? 30),
             'price_per_day_inr' => (int) $data['price_per_day_inr'],
             'amenities' => $amenities,
+            'custom_services' => VenueAmenityPresenter::sanitizeCustomServices($data['custom_services'] ?? null),
         ];
     }
 
@@ -161,14 +205,7 @@ class VenueManageController extends Controller
     /** @return array<string, mixed> */
     private function presentVenue(Venue $venue): array
     {
-        $fields = config('venues.amenity_fields', []);
-        $amenityLabels = [];
-        foreach ($venue->amenities ?? [] as $key => $value) {
-            if (! isset($fields[$key])) {
-                continue;
-            }
-            $amenityLabels[$key] = array_merge($fields[$key], ['value' => $value]);
-        }
+        $custom = $venue->custom_services ?? [];
 
         return [
             'id' => $venue->id,
@@ -183,13 +220,11 @@ class VenueManageController extends Controller
             'advance_percent' => $venue->advance_percent,
             'price_per_day_inr' => $venue->price_per_day_inr,
             'amenities' => $venue->amenities ?? [],
-            'amenity_labels' => $amenityLabels,
+            'custom_services' => $custom,
+            'amenity_labels' => VenueAmenityPresenter::labels($venue->amenities ?? [], $custom),
+            'amenity_categories' => VenueAmenityPresenter::categories(),
             'status' => $venue->status,
-            'photos' => $venue->photos->map(fn (VenuePhoto $p) => [
-                'id' => $p->id,
-                'url' => $p->url(),
-                'sort_order' => $p->sort_order,
-            ])->values(),
+            'photos' => $venue->photos->map(fn (VenuePhoto $p) => $p->toMediaRow())->values(),
         ];
     }
 
@@ -198,5 +233,22 @@ class VenueManageController extends Controller
         if ((int) $venue->partner_user_id !== (int) $request->user()->id && ! $request->user()->hasRole('admin')) {
             abort(403);
         }
+    }
+
+    private function venueTypeForUser(\App\Models\User $user): ?string
+    {
+        if ($user->hasRole('lawn')) {
+            return 'lawn';
+        }
+
+        if ($user->hasRole('banquet')) {
+            return 'banquet';
+        }
+
+        if ($user->hasRole('venue_partner')) {
+            return null;
+        }
+
+        return null;
     }
 }

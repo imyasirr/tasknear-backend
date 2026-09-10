@@ -6,9 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Catalog\Services\ProviderTypes;
 use App\Modules\Identity\Models\OtpCode;
-use App\Modules\Marketplace\Models\CatererProfile;
 use App\Modules\Venues\Models\VenuePartnerProfile;
-use App\Modules\Workers\Models\WorkerProfile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -106,38 +104,22 @@ class AuthController extends Controller
         ]);
         $user->assignRole($data['role']);
 
-        if ($data['role'] === 'venue_partner') {
+        if ($providers->isVenueRole($data['role'])) {
             VenuePartnerProfile::query()->create([
                 'user_id' => $user->id,
                 'company_name' => $data['company_name'] ?: $data['name'],
                 'city' => $data['city'] ?? $user->city,
                 'status' => 'active',
             ]);
-        } elseif ($providers->matchMode($data['role']) === 'vendor') {
-            CatererProfile::query()->create([
-                'user_id' => $user->id,
-                'company_name' => $data['company_name'] ?: $data['name'],
-                'city' => $data['city'] ?? $user->city,
-                'status' => 'active',
-                'is_available' => true,
-            ]);
-        } elseif ($providers->matchMode($data['role']) === 'worker') {
-            WorkerProfile::query()->create([
-                'user_id' => $user->id,
-                'bio' => $data['name'],
-                'city' => $data['city'] ?? $user->city ?? 'Lucknow',
-                'status' => 'pending_kyc',
-                'is_available' => true,
-            ]);
         }
 
-        return $this->tokenResponse($user->fresh(['roles', 'workerProfile', 'catererProfile', 'venuePartnerProfile']));
+        return $this->tokenResponse($user->fresh(['roles', 'venuePartnerProfile']));
     }
 
     public function me(Request $request): JsonResponse
     {
         return response()->json(
-            $this->userPayload($request->user()->load(['roles', 'workerProfile.skills.category', 'workerProfile.documents', 'catererProfile.skills.category', 'venuePartnerProfile']))
+            $this->userPayload($request->user()->load(['roles', 'venuePartnerProfile']))
         );
     }
 
@@ -171,7 +153,7 @@ class AuthController extends Controller
         $request->user()->update($data);
 
         return response()->json(
-            $this->userPayload($request->user()->fresh(['roles', 'workerProfile', 'catererProfile']))
+            $this->userPayload($request->user()->fresh(['roles', 'venuePartnerProfile']))
         );
     }
 
@@ -303,15 +285,12 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => $this->userPayload($user->fresh(['roles', 'workerProfile', 'catererProfile'])),
+            'user' => $this->userPayload($user->fresh(['roles', 'venuePartnerProfile'])),
         ]);
     }
 
     private function userPayload(User $user): array
     {
-        $pricing = app(\App\Modules\Money\Services\Pricing::class);
-        $sub = $pricing->activeSubscription($user);
-
         return [
             'id' => $user->id,
             'name' => $user->name,
@@ -321,9 +300,7 @@ class AuthController extends Controller
             'avatar_url' => $this->avatarUrl($user),
             'password_set' => (bool) $user->password_set_at,
             'roles' => $user->roles->pluck('role')->values(),
-            'worker_profile' => $user->workerProfile,
-            'caterer_profile' => $user->catererProfile,
-            'subscription' => $sub,
+            'venue_partner_profile' => $user->venuePartnerProfile,
         ];
     }
 }

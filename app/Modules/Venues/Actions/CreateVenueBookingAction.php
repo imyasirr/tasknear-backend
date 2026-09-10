@@ -63,7 +63,7 @@ class CreateVenueBookingAction
                 'requester_id' => $customer->id,
                 'vendor_user_id' => $venue->partner_user_id,
                 'type' => 'venue',
-                'provider_type' => 'venue_partner',
+                'provider_type' => $venue->venue_type,
                 'slug' => 'venue-'.Str::lower(Str::random(10)),
                 'city' => $venue->city,
                 'address' => $venue->address,

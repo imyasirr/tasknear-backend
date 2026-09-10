@@ -28,9 +28,5 @@ class AppServiceProvider extends ServiceProvider
                 $value
             )->firstOrFail();
         });
-
-        Route::bind('booking', function (string $value) {
-            return ServiceRequest::applyKey(ServiceRequest::query(), $value)->firstOrFail();
-        });
     }
 }

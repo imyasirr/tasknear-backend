@@ -46,15 +46,29 @@ class ProviderTypes
     /** @return list<string> */
     public function registerRoles(): array
     {
-        return array_values(array_unique(array_merge(
-            ['venue_partner'],
-            $this->active()
-                ->pluck('role')
-                ->filter()
-                ->unique()
-                ->values()
-                ->all(),
-        )));
+        return $this->active()
+            ->pluck('role')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /** @return list<string> */
+    public function venueRoles(): array
+    {
+        return $this->active()
+            ->filter(fn (array $row) => ($row['match_mode'] ?? '') === 'venue')
+            ->pluck('role')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function isVenueRole(string $role): bool
+    {
+        return in_array($role, $this->venueRoles(), true);
     }
 
     public function isActive(string $slug): bool
@@ -73,7 +87,7 @@ class ProviderTypes
 
     public function assertRegisterRole(string $role): void
     {
-        if ($role === 'customer' || $role === 'venue_partner') {
+        if ($role === 'customer') {
             return;
         }
 

@@ -102,7 +102,7 @@ class VenueBookingController extends Controller
                 'name' => $booking->venue->name,
                 'address' => $booking->venue->address,
                 'city' => $booking->venue->city,
-                'cover_url' => $booking->venue->photos->first()?->url(),
+                'cover_url' => $booking->venue->photos->first(fn ($p) => $p->isImage())?->url(),
             ] : null,
             'slot' => [
                 'starts_at' => $starts?->toIso8601String(),

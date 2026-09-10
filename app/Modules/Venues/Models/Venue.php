@@ -22,6 +22,7 @@ class Venue extends Model
         'advance_percent',
         'price_per_day_inr',
         'amenities',
+        'custom_services',
         'status',
     ];
 
@@ -29,6 +30,7 @@ class Venue extends Model
     {
         return [
             'amenities' => 'array',
+            'custom_services' => 'array',
         ];
     }
 
